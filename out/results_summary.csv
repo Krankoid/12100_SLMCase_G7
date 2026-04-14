@@ -1,0 +1,7 @@
+phase,scenario,device,layers,heads,embd,parameters,tokens_or_iters,num_runs,energy_kwh_total,energy_kwh_per_run,emissions_kg_total,emissions_kg_per_run
+train,baseline,cuda,4,4,128,834432,2000,1,0.003746,0.003746,0.000568,0.000568
+train,altA,cuda,8,8,256,6400768,2000,1,0.013634,0.013634,0.002068,0.002068
+train,altB,cpu,4,4,128,834432,2000,1,0.006655,0.006655,0.001009,0.001009
+infer,baseline,cuda,-,-,-,834432,100,30,0.000226,0.00000754,0.000034,0.00000114
+infer,altA,cuda,-,-,-,6400768,100,30,0.000407,0.00001357,0.000062,0.00000206
+infer,altB,cuda,-,-,-,834432,1000,10,0.000653,0.00006528,0.000099,0.00000990
