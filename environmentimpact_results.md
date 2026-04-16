@@ -99,90 +99,47 @@ Energy ranking for inference: **Alt B > Alt A > Baseline**
 
 ## 4. Safe operating space (grandfathering)
 
-### Fixed values
+Use the **"absolute sustainability" sheet** in the Mobility Excel tool (the file
+`Exercise solutions, Mobility - Absolute sustainability 1210X QMAS.xlsx` from DTU Learn).
 
-| Value | Source | Figure |
-|-------|--------|--------|
-| Global planetary boundary | Bjorn et al. 2015, tool cell C6 | 6.81e12 kgCO2e/yr |
-| World population | Tool cell C7 | 8.00e9 |
-| PB per capita | C6/C7 | **851.5 kgCO2e/cap/yr** |
-| Denmark per-capita emissions (F14) | "world carbon footprint data" sheet in Mobility Excel | **[PLACEHOLDER - look up DK row, ~10,000-11,000 kgCO2e/cap/yr]** |
+Steps:
+1. Open the "absolute sustainability" sheet.
+2. Enter your emissions value (F15) for each scenario - the `emissions_kg_total` or
+   `emissions_kg_per_run` value from `results_summary.csv`.
+3. The sheet reads Denmark's per-capita emissions from the "world carbon footprint data"
+   tab automatically (F14, around 10,000-11,000 kgCO2e/cap/yr for DK).
+4. Read off F17 (sustainable boundary for this FU) and F18 (exceedance ratio).
 
-### Formula (applied to each scenario)
+The planetary boundary is 6.81e12 kgCO2e/yr divided across 8e9 people = 851.5 kgCO2e/cap/yr.
+Exceedance ratios well above 1 are expected and are the intended finding.
 
-```
-F16 = F15 / F14          share of per-capita budget used by this FU
-F17 = F16 * 851.5        sustainable boundary for this FU (kgCO2e)
-F18 = F15 / F17          exceedance ratio
-```
+### Results (fill in from the Excel tool)
 
-Note: under grandfathering, F18 simplifies to F14 / 851.5 for every scenario.
-This means all scenarios have the same exceedance ratio, equal to the factor by which
-Denmark's current per-capita emissions exceed the planetary boundary. If F14 = 10,500,
-then F18 = 10,500 / 851.5 = **~12.3 for all scenarios**. The scenarios differ in their
-absolute emissions and absolute sustainable boundaries, not in their exceedance ratios.
-
-### Results table (fill in F14 from the Excel tool)
-
-| Scenario | Emissions F15 (kg) | F14 (kg/cap/yr) | Boundary F17 (kg) | Exceedance F18 |
-|----------|--------------------|-----------------|-------------------|----------------|
-| Training Baseline | 0.000568 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Training Alt A | 0.002068 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Training Alt B | 0.001009 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Baseline | 0.00000114 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Alt A | 0.00000206 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Alt B | 0.00000990 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-
-Once you have F14, plug it in everywhere. F17 = (F15/F14) * 851.5. F18 = F14/851.5.
+| Scenario | Emissions F15 (kg) | GF boundary F17 (kg) | Exceedance F18 |
+|----------|--------------------|----------------------|----------------|
+| Training Baseline | 0.000568 | [from Excel] | [from Excel] |
+| Training Alt A | 0.002068 | [from Excel] | [from Excel] |
+| Training Alt B | 0.001009 | [from Excel] | [from Excel] |
+| Inference Baseline | 0.00000114 | [from Excel] | [from Excel] |
+| Inference Alt A | 0.00000206 | [from Excel] | [from Excel] |
+| Inference Alt B | 0.00000990 | [from Excel] | [from Excel] |
 
 ---
 
 ## 5. Economic allocation (optional)
 
-Economic allocation assigns a sustainable boundary based on the economic value of the
-activity relative to a person's total annual spending (GDP PPP per capita).
+If required, apply economic allocation using the same "absolute sustainability" sheet:
+enter the cloud cost of one FU (in DKK) as I15, and Danish GDP PPP per capita as I14
+(~432,000 DKK/cap/yr, World Bank). The sheet calculates I17 and I18.
 
-### Formula
+Cloud cost estimates (AWS on-demand):
+- GPU scenarios: `g4dn.xlarge` at $0.526/hr
+- CPU scenario: `c6i.large` at $0.085/hr
 
-```
-I14 = Danish GDP per capita PPP in DKK (~432,647 DKK/cap/yr, World Bank)
-I15 = cloud cost of one FU in DKK
-I16 = I15 / I14
-I17 = I16 * 851.5        sustainable boundary under EA (kgCO2e)
-I18 = F15 / I17          exceedance under EA
-```
+Multiply duration (seconds) by rate (USD/hr) / 3600, then convert USD to DKK (~6.9 DKK/USD).
 
-### Cloud cost estimates (AWS on-demand, retrieved [PLACEHOLDER date])
-
-GPU scenarios mapped to `g4dn.xlarge` (NVIDIA T4, $0.526/hr).
-CPU scenario mapped to `c6i.large` ($0.085/hr).
-USD to DKK conversion rate: [PLACEHOLDER - check on day of submission, ~6.9 DKK/USD].
-
-| Scenario | Duration (s) | Rate (USD/hr) | Cost (USD) | Cost (DKK) |
-|----------|-------------|--------------|-----------|-----------|
-| Training Baseline | 43.1 | 0.526 | 0.00630 | [PLACEHOLDER] |
-| Training Alt A | 133.3 | 0.526 | 0.01948 | [PLACEHOLDER] |
-| Training Alt B | 1324.9 | 0.085 | 0.03128 | [PLACEHOLDER] |
-| Inference Baseline | [PLACEHOLDER] | 0.526 | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Alt A | [PLACEHOLDER] | 0.526 | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Alt B | [PLACEHOLDER] | 0.526 | [PLACEHOLDER] | [PLACEHOLDER] |
-
-### EA results table
-
-| Scenario | Emissions F15 (kg) | Cost I15 (DKK) | I16 | Boundary I17 (kg) | Exceedance I18 |
-|----------|--------------------|---------------|-----|-------------------|----------------|
-| Training Baseline | 0.000568 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Training Alt A | 0.002068 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Training Alt B | 0.001009 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Baseline | 0.00000114 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Alt A | 0.00000206 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-| Inference Alt B | 0.00000990 | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
-
-### GF vs EA comparison
-
-Under grandfathering the budget scales with each scenario's own emissions, giving the same
-exceedance ratio for all scenarios (~12-13 for Denmark). Under economic allocation the
-budget is proportional to cost: since cloud compute is extremely cheap relative to a
-person's annual income (I16 is tiny), I17 is far smaller than the GF boundary, and
-exceedance ratios under EA will be much higher than under GF. This shows that when
-judged by economic weight, AI compute is very carbon-intensive per unit of economic value.
+| Scenario | Duration (s) | Cost (USD) |
+|----------|-------------|-----------|
+| Training Baseline | 43.1 | 0.00630 |
+| Training Alt A | 133.3 | 0.01948 |
+| Training Alt B | 1324.9 | 0.03128 |
