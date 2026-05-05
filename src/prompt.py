@@ -58,11 +58,14 @@ def main():
     def decode(tokens):
         return "".join([itos[t] for t in tokens])
 
+    # Part 1: create the model and load the trained weights from the checkpoint.
     config = GPTConfig(**model_cfg)
     model = GPT(config).to(DEVICE)
     model.load_state_dict(ckpt["model_state"])
     model.eval()
 
+
+    # Part 2: encode the prompt
     idx = torch.tensor([encode(PROMPT)], dtype=torch.long, device=DEVICE)
 
     tracker = EmissionsTracker(
@@ -76,6 +79,8 @@ def main():
 
     t0 = time.time()
     last_out = None
+
+    # Part 3: generate text from the prompt
     for _ in range(NUM_RUNS):
         last_out = model.generate(
             idx,

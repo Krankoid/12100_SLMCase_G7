@@ -107,6 +107,17 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     set_seed(SEED)
 
+    tracker = EmissionsTracker(
+        project_name=f"train_{RUN_TAG}_L{N_LAYER}H{N_HEAD}E{N_EMBD}_{DEVICE}",
+        output_dir=OUT_DIR,
+        output_file=f"emissions_train_{RUN_TAG}.csv",
+        measure_power_secs=5,
+        log_level="warning",
+    )
+    tracker.start()
+
+    # Part 1 - load data and create the model
+
     meta = load_meta(DATA_DIR)
     vocab_size = meta["vocab_size"] if meta and "vocab_size" in meta else 50304
 
@@ -136,20 +147,15 @@ def main():
     # print(f"Model parameters: {model.get_num_params():,}")
     # print(f"Training for {MAX_ITERS} iterations | batch={BATCH_SIZE} | block={BLOCK_SIZE}")
 
-    tracker = EmissionsTracker(
-        project_name=f"train_{RUN_TAG}_L{N_LAYER}H{N_HEAD}E{N_EMBD}_{DEVICE}",
-        output_dir=OUT_DIR,
-        output_file=f"emissions_train_{RUN_TAG}.csv",
-        measure_power_secs=5,
-        log_level="warning",
-    )
-    tracker.start()
 
     t0 = time.time()
     for it in range(MAX_ITERS + 1):
         # periodic evaluation
         if it % EVAL_INTERVAL == 0:
+
+            # Part 2 - estimate losses on train and val sets, and print progress
             losses = estimate_loss(model, DATA_DIR, BLOCK_SIZE, BATCH_SIZE, DEVICE, EVAL_ITERS)
+            
             dt = time.time() - t0
             print(f"iter {it:5d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | elapsed {dt:.1f}s")
 
@@ -172,9 +178,14 @@ def main():
 
         # training step
         x, y = get_batch("train", DATA_DIR, BLOCK_SIZE, BATCH_SIZE, DEVICE)
+
+        # part 3 - forward the model and get the loss
         _, loss = model(x, y)
 
         optimizer.zero_grad(set_to_none=True)
+
+
+        # part 4 - backward pass and update the parameters
         loss.backward()
 
         if GRAD_CLIP and GRAD_CLIP > 0:
