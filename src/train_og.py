@@ -2,17 +2,30 @@
 Course training script (simplified from nanoGPT) — instrumented with per-stage
 CodeCarbon tracking for the life-cycle assessment in task3/lifecycle_fixes.md.
 
-The training phase is split into six life-cycle stages:
-  Part 1 — setup           : load metadata, build model + optimizer
-  Part 2 — data_load       : sample a batch from the memmapped dataset
-  Part 3 — forward         : forward pass through the model (computes loss)
-  Part 4 — backward_update : zero_grad + backward + grad clip + optimizer step
-  Part 5 — evaluation      : periodic loss estimation on train/val splits
-  Part 6 — checkpoint_save : serialise the model + optimizer to disk
+Four life-cycle stages, tracked at two different resolutions to keep the
+overhead of tracker.start_task/stop_task from dominating short iterations:
 
-Each stage is wrapped in tracker.start_task("<tag>") / tracker.stop_task().
-Per-iteration energies are accumulated into stage_totals and written to a
-stages_<RUN_TAG>.csv at the end.
+  Stages tracked DIRECTLY via tracker.start_task / tracker.stop_task
+  (rare events, low overhead):
+    setup       — Part 1: load metadata, build model + optimizer
+    evaluation  — Part 2: periodic loss estimation on train/val splits
+
+  Stages tracked via WALL-CLOCK TIME FRACTION inside one big training-loop task
+  (called every iteration, would dominate runtime if measured directly):
+    forward         — Part 3: forward pass through the model (computes loss)
+    backward_update — Part 4: zero_grad + backward + grad clip + optimizer step
+
+  The training loop as a whole is wrapped in tracker.start_task("training_loop").
+  Inside, time.perf_counter() (with cuda synchronize when on GPU) measures the
+  duration of forward and backward_update. At the end, the training_loop energy
+  is split between those two sub-stages in proportion to their measured
+  durations. The small slice of training-loop time spent in get_batch (data
+  loading) and Python overhead is absorbed proportionally into forward and
+  backward_update; on GPU this is negligible. Checkpoint saves happen inside
+  the training_loop window without their own task and are also absorbed.
+
+  This assumes approximately constant power draw during compute, which holds
+  for a fixed model architecture and batch size within a single run.
 
 Source: https://github.com/karpathy/nanoGPT
 """
@@ -154,7 +167,7 @@ def main():
 
     stage_totals = {
         s: {"energy_kwh": 0.0, "emissions_kg": 0.0, "duration_s": 0.0, "n_calls": 0}
-        for s in ["setup", "data_load", "forward", "backward_update", "evaluation", "checkpoint_save"]
+        for s in ["setup", "forward", "backward_update", "evaluation", "training_loop"]
     }
 
     # ------------------------------------------------------------------
@@ -185,25 +198,43 @@ def main():
 
     _record(stage_totals, "setup", tracker.stop_task())
 
+    # cuda sync wrapper for accurate sub-stage timing on GPU; no-op on CPU.
+    def _sync():
+        if DEVICE == "cuda":
+            torch.cuda.synchronize()
+
+    # Sub-stage wall-clock accumulators (seconds), used to split the training-loop
+    # energy proportionally between forward and backward_update.
+    sub_durations = {"forward": 0.0, "backward_update": 0.0}
+    sub_counts = {"forward": 0, "backward_update": 0}
+
     t0 = time.time()
+
+    # ------------------------------------------------------------------
+    # Parts 3-4 — training loop, tracked as ONE task to avoid 6000 starts/stops
+    # ------------------------------------------------------------------
+    tracker.start_task("training_loop")
+
     for it in range(MAX_ITERS + 1):
 
         if it % EVAL_INTERVAL == 0:
+            # close the training-loop window so eval is measured separately
+            _record(stage_totals, "training_loop", tracker.stop_task())
+
             # ----------------------------------------------------------
-            # Part 5 — evaluation: estimate train/val loss
+            # Part 2 — evaluation: estimate train/val loss
             # ----------------------------------------------------------
             tracker.start_task("evaluation")
             losses = estimate_loss(model, DATA_DIR, BLOCK_SIZE, BATCH_SIZE, DEVICE, EVAL_ITERS)
             _record(stage_totals, "evaluation", tracker.stop_task())
 
             dt = time.time() - t0
-            print(f"iter {it:5d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | elapsed {dt:.1f}s")
+            print(f"iter {it:5d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | elapsed {dt:.1f}s", flush=True)
+
+            # reopen the training-loop window before the (untracked) checkpoint save
+            tracker.start_task("training_loop")
 
             if SAVE_CHECKPOINT and it > 0:
-                # ------------------------------------------------------
-                # Part 6 — checkpoint_save: serialise model + optimizer
-                # ------------------------------------------------------
-                tracker.start_task("checkpoint_save")
                 config_dump = {
                     "data_dir": DATA_DIR,
                     "train": {
@@ -215,39 +246,40 @@ def main():
                     "model": asdict(cfg),
                 }
                 save_checkpoint(OUT_DIR, model, optimizer, it, config_dump)
-                _record(stage_totals, "checkpoint_save", tracker.stop_task())
 
-        # --------------------------------------------------------------
-        # Part 2 — data_load: sample a batch from the memmap dataset
-        # --------------------------------------------------------------
-        tracker.start_task("data_load")
+        # data_load: untimed; absorbed into training_loop residual time
         x, y = get_batch("train", DATA_DIR, BLOCK_SIZE, BATCH_SIZE, DEVICE)
-        _record(stage_totals, "data_load", tracker.stop_task())
 
         # --------------------------------------------------------------
         # Part 3 — forward: forward pass through the model (loss)
         # --------------------------------------------------------------
-        tracker.start_task("forward")
+        t = time.perf_counter()
         _, loss = model(x, y)
-        _record(stage_totals, "forward", tracker.stop_task())
+        _sync()
+        sub_durations["forward"] += time.perf_counter() - t
+        sub_counts["forward"] += 1
 
         # --------------------------------------------------------------
         # Part 4 — backward_update: zero_grad + backward + clip + step
         # --------------------------------------------------------------
-        tracker.start_task("backward_update")
+        t = time.perf_counter()
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         if GRAD_CLIP and GRAD_CLIP > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
         optimizer.step()
-        _record(stage_totals, "backward_update", tracker.stop_task())
+        _sync()
+        sub_durations["backward_update"] += time.perf_counter() - t
+        sub_counts["backward_update"] += 1
 
         if it % LOG_INTERVAL == 0:
-            print(f"iter {it:5d} | loss {loss.item():.4f}")
+            print(f"iter {it:5d} | loss {loss.item():.4f}", flush=True)
 
-    # final checkpoint (also instrumented as Part 6)
+    # close the training-loop task at the end of all iterations
+    _record(stage_totals, "training_loop", tracker.stop_task())
+
+    # final checkpoint — written but not tracked as its own life-cycle stage
     if SAVE_CHECKPOINT:
-        tracker.start_task("checkpoint_save")
         config_dump = {
             "data_dir": DATA_DIR,
             "train": {
@@ -260,13 +292,28 @@ def main():
         }
         save_checkpoint(OUT_DIR, model, optimizer, MAX_ITERS, config_dump,
                         name=f"ckpt_{RUN_TAG}.pt")
-        _record(stage_totals, "checkpoint_save", tracker.stop_task())
 
     tracker.stop()
+
+    # Split the training_loop energy/emissions between forward and
+    # backward_update by their measured wall-clock time fractions.
+    loop = stage_totals["training_loop"]
+    total_sub = sum(sub_durations.values())
+    if total_sub > 0 and loop["n_calls"] > 0:
+        for stage, dur in sub_durations.items():
+            frac = dur / total_sub
+            stage_totals[stage]["energy_kwh"] = loop["energy_kwh"] * frac
+            stage_totals[stage]["emissions_kg"] = loop["emissions_kg"] * frac
+            stage_totals[stage]["duration_s"] = dur
+            stage_totals[stage]["n_calls"] = sub_counts[stage]
+
     _write_stages_csv(OUT_DIR, RUN_TAG, stage_totals)
 
-    total_kwh = sum(d["energy_kwh"] for d in stage_totals.values())
-    total_kg = sum(d["emissions_kg"] for d in stage_totals.values())
+    # Total: sum of the four leaf life-cycle stages. The training_loop row in
+    # the CSV is the pre-attribution measurement; don't add it to the total.
+    leaf_stages = ["setup", "forward", "backward_update", "evaluation"]
+    total_kwh = sum(stage_totals[s]["energy_kwh"] for s in leaf_stages)
+    total_kg = sum(stage_totals[s]["emissions_kg"] for s in leaf_stages)
     print(f"[total] tag={RUN_TAG} device={DEVICE} energy={total_kwh:.6f} kWh "
           f"emissions={total_kg:.6f} kgCO2e")
 

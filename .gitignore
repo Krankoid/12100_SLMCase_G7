@@ -3,3 +3,11 @@ __pycache__/
 /data/train.bin
 /data/val.bin
 /data/input.txt
+
+# CodeCarbon stray outputs (default file + per-task aux files + macOS log)
+/emissions.csv
+emissions_base_*.csv
+powermetrics_log.txt
+
+# editor settings (machine-specific)
+.vscode/

@@ -70,6 +70,33 @@ def _write_stages_csv(out_dir: str, run_tag: str, stage_totals: dict):
     print(f"[stages] wrote {path}")
 
 
+def gpu_warmup(max_new_tokens: int = 200, ckpt_path: str = None, device: str = None):
+    """Trigger CUDA context init + cuDNN autotune across all sequence-length
+    shapes used during the real generation. Because nanoGPT's generate does a
+    fresh forward over the full growing sequence at each step (no KV cache),
+    cuDNN sees a new shape per new token; the warmup must run at least as long
+    as the largest MAX_NEW_TOKENS in the scenario to cover all shapes.
+
+    Intended to be called once per scenario before the sweep loop starts;
+    cuDNN's tuning cache persists for the lifetime of the Python process.
+    """
+    dev = device or DEVICE
+    if dev != "cuda":
+        return
+    ckpt_w = torch.load(ckpt_path or CKPT_PATH, map_location=dev)
+    cfg_w = GPTConfig(**ckpt_w["config"]["model"])
+    model_w = GPT(cfg_w).to(dev)
+    model_w.load_state_dict(ckpt_w["model_state"])
+    model_w.eval()
+    idx_w = torch.zeros((1, 1), dtype=torch.long, device=dev)
+    with torch.no_grad():
+        _ = model_w.generate(idx_w, max_new_tokens=max_new_tokens, temperature=1.0, top_k=50)
+    torch.cuda.synchronize()
+    del model_w, ckpt_w
+    torch.cuda.empty_cache()
+    print(f"[warmup] cuDNN warmed for sequences up to ~{max_new_tokens + 1} tokens")
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 

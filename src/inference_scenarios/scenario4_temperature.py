@@ -52,6 +52,12 @@ def main():
     if DEVICE != "cuda":
         print("WARNING: cuda not available, scenario will run on cpu")
     os.makedirs(OUT_DIR, exist_ok=True)
+
+    # one-time GPU warmup at the max token count used in this sweep, so the
+    # first temperature point isn't biased by cuDNN autotune for long sequences.
+    import prompt_og as P
+    P.gpu_warmup(max_new_tokens=500, ckpt_path=CKPT_PATH, device=DEVICE)
+
     for temperature in TEMPERATURES:
         run_one(temperature)
     print(f"\nAll done. Per-stage CSVs in {os.path.abspath(OUT_DIR)}/")

@@ -51,6 +51,12 @@ def main():
     if DEVICE != "cuda":
         print("WARNING: cuda not available, scenario will run on cpu")
     os.makedirs(OUT_DIR, exist_ok=True)
+
+    # one-time GPU warmup at the max token count used in this sweep, so the
+    # first token-count point isn't biased by cuDNN autotune for long sequences.
+    import prompt_og as P
+    P.gpu_warmup(max_new_tokens=max(TOKEN_COUNTS), ckpt_path=CKPT_PATH, device=DEVICE)
+
     for n in TOKEN_COUNTS:
         run_one(n)
     print(f"\nAll done. Per-stage CSVs in {os.path.abspath(OUT_DIR)}/")

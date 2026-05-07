@@ -23,7 +23,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 OUT_LIFECYCLE = os.path.join(PROJECT_ROOT, "out_lifecycle")
 FIG_DIR = HERE
 
-TRAINING_STAGES = ["setup", "data_load", "forward", "backward_update", "evaluation", "checkpoint_save"]
+TRAINING_STAGES = ["setup", "forward", "backward_update", "evaluation"]
 INFERENCE_STAGES = ["setup", "encoding", "generation", "decoding"]
 
 STAGE_COLORS = {
