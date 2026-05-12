@@ -6,36 +6,37 @@ developed for the course **1210X Quantitative Methods to Assess Sustainability**
 Based on the starter code provided by the course TAs
 ([CarlosFdHL/GWPinLanguageModels](https://github.com/CarlosFdHL/GWPinLanguageModels)).
 
----
-
-## Group 7 additions
-
-The original TA code plus the following:
-
-- **CodeCarbon** integrated into `src/train.py` and `src/prompt.py` to automatically measure energy and CO2e emissions during training and inference.
-- **`run_scenarios.py`** at the repo root: runs all 6 scenarios (3 training + 3 inference) in sequence, saves checkpoints, and writes `out/results_summary.csv`.
-- **`out/`** folder with all results: emissions CSVs per scenario and the combined summary.
-
 ## Repository structure
 
 ```text
 .
 ├── data/
-│   └── prepare.py             # Dataset preparation (Tiny Shakespeare, character-level)
+│   └── prepare.py                      # Dataset preparation (Tiny Shakespeare, char-level)
 │
 ├── src/
-│   ├── model.py               # Model architecture (unmodified)
-│   ├── train.py               # Training script + CodeCarbon integration
-│   └── prompt.py              # Inference script + CodeCarbon integration
+│   ├── model.py                        # Model architecture
+│   ├── train_og.py                     # Original training script
+│   ├── prompt_og.py                    # Original inference script
+│   │
+│   ├── training_scenarios/             # CodeCarbon training scenarios
+│   │   ├── scenario1_hardware_cpu.py
+│   │   ├── scenario1_hardware_gpu.py
+│   │   ├── scenario1_hardware.py
+│   │   ├── scenario2_layers.py
+│   │   └── scenario3_batchsize.py
+│   │
+│   └── inference_scenarios/            # CodeCarbon inference scenarios
+│       ├── scenario4_temperature.py
+│       └── scenario5_tokens.py
 │
-├── out/
-│   ├── results_summary.csv    # All scenario results in one table
-│   ├── emissions_train_*.csv  # Per-scenario CodeCarbon output (training)
-│   ├── emissions_infer_*.csv  # Per-scenario CodeCarbon output (inference)
-│   └── ckpt_*.pt              # Trained model checkpoints
+├── task3/
+│   ├── ecologits_benchmark.py          # EcoLogits API-model benchmark
+│   ├── ecologits_benchmark.csv         # EcoLogits results
+│   └── figures/                        # Plotting scripts and output figures
 │
-├── run_scenarios.py           # Runs all 6 scenarios end to end
-├── env_requirements.yaml      # Conda environment
+├── out_lifecycle/                      # CodeCarbon outputs + checkpoints per scenario
+│
+├── env_requirements.yaml               # Conda environment
 └── README.md
 ```
 
@@ -44,175 +45,49 @@ The original TA code plus the following:
 ```bash
 conda env create -f env_requirements.yaml
 conda activate slm-sustainability
-python data/prepare.py
 ```
 
-## Running the scenarios
+## Running the code
 
-```bash
-python run_scenarios.py
-```
-
-The script is resumable: if interrupted, re-running it skips any scenario whose checkpoint
-already exists. Results are written to `out/results_summary.csv`.
-
-**Already done:** all 6 scenarios have been run and results are committed to the repo.
-
-## Scenarios
-
-**Training:**
-
-| Scenario | Layers | Heads | Embedding | Hardware | Parameters |
-|----------|--------|-------|-----------|----------|------------|
-| Baseline | 4 | 4 | 128 | GPU | 834,432 |
-| Alt A    | 8 | 8 | 256 | GPU | 6,400,768 |
-| Alt B    | 4 | 4 | 128 | CPU | 834,432 |
-
-**Inference** (prompt: "To be, or not to be", temperature 1.0, top_k 50):
-
-| Scenario | Model | Max new tokens |
-|----------|-------|----------------|
-| Baseline | 4/4/128 | 100 |
-| Alt A    | 8/8/256 | 100 |
-| Alt B    | 4/4/128 | 1000 |
-
----
-
----
-
-## Original course README
-
-The goal of the case study is **not to optimize model performance**, but to understand how computational design and usage choices translate into sustainability impacts.
-
----
-
-### Create a new environment for this project
-To create a new environment, in the project directory run:
-```bash
-conda env create -f env_requirements.yaml
-```
-To activate it:
-```bash
-conda activate slm-sustainability
-```
-
-### General workflow
-
-1. Prepare the dataset
-2. Run the model architecture
-3. Train the language model
-4. Run inference (prompting)
-5. Quantify sustainability impacts
-
----
-
-### 1. Dataset preparation (`data/prepare.py`)
-
-This script prepares the **Tiny Shakespeare** dataset for character-level language modeling.
-
-It performs the following steps:
-
-- Downloads the dataset (if not already present)
-- Builds a character-level vocabulary
-- Splits the data into training and validation sets
-- Generates:
-  - `train.bin`
-  - `val.bin`
-  - `meta.pkl` (vocabulary and encoding metadata)
-
-Run this script **once** before training:
+### 1. Prepare the dataset
 
 ```bash
 python data/prepare.py
 ```
 
-You are **not required to modify** this file.
+### 2. Train / Inference (original scripts)
 
----
-
-### 2. Model architecture (`src/model.py`)
-
-This file contains the **complete definition of the language model**.
-
-- Architecture: **Transformer, decoder-only**
-- Conceptually similar to GPT-family models (e.g. GPT-2 / ChatGPT), but much smaller
-- Includes:
-  - Token and positional embeddings
-  - Masked multi-head self-attention
-  - Feed-forward (MLP) layers
-  - Residual connections and Layer Normalization
-
-You are **not required** to modify this file. However, students interested in model design are encouraged to experiment with more complex variants.
-
-In all cases, you should:
-
-- Inspect it to understand the model structure
-- Report the architecture and number of parameters in your sustainability assessment
-
----
-
-### 3. Training (`src/train.py`)
-
-This script trains the Small Language Model from scratch.
-
-Run this script using:
 ```bash
-python src/train.py
+python src/train_og.py
+python src/prompt_og.py
 ```
 
-#### Tunable parameters
+### 3. CodeCarbon scenarios
 
-At the top of `train.py`, you will find a configuration section where you can adjust:
+Each scenario script runs training or inference while logging energy and CO2e
+emissions with CodeCarbon. Outputs are written to `out_lifecycle/<scenario>/`.
 
-- **Model size:** number of layers, embedding dimension, number of attention heads
-- **Training workload:** batch size, number of training iterations
-- **Hardware:** CPU or GPU
+**Training scenarios:**
 
-These parameters are the **main levers** for sensitivity analysis, scenario comparison, and sustainability trade-off evaluation.
-
-#### What you should NOT change
-
-- The training loop logic
-- The loss function
-- The data loading logic
-
----
-
-### 4. Inference / Prompting (`src/prompt.py`)
-
-Run this script using:
 ```bash
-python src/prompt.py
+python src/training_scenarios/scenario1_hardware.py     # CPU vs GPU
+python src/training_scenarios/scenario2_layers.py       # model size sweep
+python src/training_scenarios/scenario3_batchsize.py    # batch size sweep
 ```
 
-This script performs **inference** using a trained model checkpoint. It loads the trained model, accepts a text prompt, and generates new tokens autoregressively.
+**Inference scenarios:**
 
-#### Tunable parameters
+```bash
+python src/inference_scenarios/scenario4_temperature.py # sampling temperature
+python src/inference_scenarios/scenario5_tokens.py      # generated token count
+```
 
-- Prompt text
-- Number of generated tokens
-- Sampling parameters (e.g. temperature, top-k)
+### 4. EcoLogits benchmark
 
----
+Benchmarks impacts of large hosted API models (separate from the local SLM).
 
-### Learning objectives
+```bash
+python task3/ecologits_benchmark.py
+```
 
-After completing this case study, you should be able to:
-
-- Apply life-cycle thinking to digital and computational systems
-- Understand the structure of modern language models
-- Quantify environmental impacts of training and inference
-- Perform sensitivity analysis on computational parameters
-- Reflect on trade-offs across environmental, economic, and social dimensions
-- Connect small-scale experiments to large-scale AI deployment
-
----
-
-### Important notes
-
-- Model performance (text quality) is **not graded**
-- Transparency, assumptions, and reproducibility are essential
-- Clearly document all parameter choices and scenarios in your report
-- Focus on **sustainability insights**, not deep learning optimization
-
-If you have questions about the code structure or the scope of allowed modifications, refer to the assignment description or contact the course TAs.
+Results are written to `task3/ecologits_benchmark.csv`.
