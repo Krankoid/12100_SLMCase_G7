@@ -55,6 +55,7 @@ def load_stages_csv(path):
             out[row["stage"]] = {
                 "energy_kwh": float(row["energy_kwh"]),
                 "emissions_kg": float(row["emissions_kg"]),
+                "total_duration_s": float(row["total_duration_s"]),
             }
     return out
 
@@ -93,8 +94,9 @@ def plot_scenario(folder, phase, x_label, sort_key, runs):
     x_labels = [pretty_xlabel(t, folder) for t in sorted_tags]
 
     for metric, ylabel, suffix in [
-        ("energy_kwh",   "Energy (kWh)",                "kwh"),
-        ("emissions_kg", "CO₂ emissions (kg)",     "co2"),
+        ("energy_kwh",       "Energy (kWh)",          "kwh"),
+        ("emissions_kg",     "CO₂ emissions (kg)",    "co2"),
+        ("total_duration_s", "Wall-clock duration (s)", "duration"),
     ]:
         fig, ax = plt.subplots(figsize=(7, 4.5))
         bottoms = [0.0] * len(sorted_tags)

@@ -1,0 +1,6 @@
+hardware_duration.png	Wall-clock training time per life-cycle stage (CPU vs GPU).
+hardware_power.png	Average power draw during training (CPU vs GPU).
+hardware_co2.png	Training CO₂ emissions per life-cycle stage (CPU vs GPU).
+layers_co2.png	Training CO₂ emissions scale with model depth.
+tokens_co2.png	Inference CO₂ emissions scale with output length; generation dominates.
+ranked_impact.png	Which knob moves the needle? Max/min CO₂e ratio across each sweep.
